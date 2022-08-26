@@ -1,0 +1,108 @@
+model LongTermMarketEquilibrium
+  uses "mmxprs","mmsystem","mmjobs"
+  !! Reading data from file
+  filename := "DataReal.txt";
+
+declarations
+  ! number of generator
+  nbGen: integer
+  !number of Regions
+  nbRegions: integer
+  ! number of hours
+  nbHours: integer
+end-declarations
+
+! Read The various numbers from The file
+initializations from filename
+  nbGen nbRegions nbHours
+end-initializations
+
+declarations
+  ! set of Generator
+  U = 1..nbGen
+  ! set of Regions
+  R = 1..nbRegions
+  ! set of hours(Times)
+  T = 1..nbHours
+
+  ! The generation cost
+  cVar: array(R,U) of real
+  cFix: array(R,U) of real
+
+  ! generation capacity
+  ! K: array(U,R) of real
+
+  ! demand
+  RD2015: array(R,T) of real
+  RD2021: array(R,T) of real
+  RD2030: array(R,T) of real
+  ! The Transport capacity from one Region To another
+  psi:array(R,R) of real
+
+  mean2021: array(R,T) of real
+  sd2021: array(R,T) of real
+  mean2030: array(R,T) of real
+  sd2030: array(R,T) of real
+  mean2035: array(R,T) of real
+  sd2035: array(R,T) of real
+  mean2045: array(R,T) of real
+  sd2045: array(R,T) of real
+
+  erfinv: array(1..10) of real
+  !the cdf inverse normal
+  !cdfinv_95: array(R,T) of real
+
+  ! The variables
+  ! The average production power To generate U units of power at Time T and Region R
+  y: array(U,R,T) of mpvar
+  !
+  Knew: array(U,R) of mpvar
+  ! power flow from one Region To another
+  P:array(R,R) of mpvar
+  
+  cco2021:array(R,T) of mpvar
+  cco2030:array(R,T) of mpvar
+  cco2035:array(R,T) of mpvar
+  cco2045:array(R,T) of mpvar
+
+end-declarations
+
+initializations from filename
+  cVar cFix RD2015 RD2021 RD2030 psi mean2021 sd2021 mean2030 sd2030 mean2035 sd2035 mean2045 sd2045 erfinv
+end-initializations
+
+! the constraints
+forall(r in R) do
+  forall(u in U) do
+    forall(t in T) do
+      y(u,r,t) >= 0
+      y(u,r,t) <=  Knew(u,r)
+    end-do
+  end-do
+end-do
+
+forall(t in T, r in R) do
+cco2021(r,t) = sqrt(2)*sd2021(r,t)*erfinv(9) + mean2021(r,t)
+! cco2030(r,t) = sqrt(2)*sd2030(r,t)*erfinv + mean2030(r,t)
+! cco2035(r,t) = sqrt(2)*sd2035(r,t)*erfinv + mean2035(r,t)
+! cco2045(r,t) = sqrt(2)*sd2045(r,t)*erfinv + mean2045(r,t)
+end-do
+
+forall(t in T, r in R) do
+sum(u in U) y(u,r,t) >= cco2021(r,t)
+end-do
+
+forall(r in R, rBar in R) do
+P(r,rBar) <= psi(r,rBar)
+end-do
+
+! The objective
+objective1:= sum(u in U, r in R, t in T) y(u,r,t)*cVar(r,u)
+objective2:= sum(u in U, r in R)Knew(u,r)*cFix(r,u)
+objective:= objective1 + objective2
+!objective:= sum(u in U, r in R, t in T) (y(u,r,t)*cVar(r,u) + Knew(u,r)*cFix(r,u))
+minimise(objective)
+
+! Results output
+writeln("total: ",getobjval)
+end-model
